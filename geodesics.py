@@ -1,54 +1,64 @@
-from sympy import*
-M, t, r, theta, phi = symbols("M, t, r, theta, phi")
-coor = [t, r, theta , phi]
-g = []
-def Tensor(i, j):
-    g00 = 1-M/r
-    g01 = 0
-    g02 = 0
-    g03 = 0
-    g10 = 0
-    g11 = 1/(1-2*M/r)
-    g12 = 0
-    g13 = 0
-    g20 = 0
-    g21 = 0
-    g22 = r**2
-    g23 = 0
-    g30 = 0
-    g31 = 0
-    g32 = 0
-    g33 = r**2*sin(theta)**2
-    return  [[g00,g01,g02,g03],
-             [g10,g11,g12,g13],
-             [g20,g21,g22,g23],
-             [g30,g31,g32,g33]][i][j]
+import numpy as np
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from tensorflow.keras import layers, models
 
-def dm(i, j, k):
-    diff(Tensor(i,j), coor(k))
-def im(i, j):
-    K = Matrix([[Tensor(0,0), Tensor(0,1), Tensor(0,2), Tensor(0,3)],
-                [Tensor(1,0), Tensor(1,1), Tensor(1,2), Tensor(1,3)],
-                [Tensor(2,0), Tensor(2,1), Tensor(2,2), Tensor(2,3)],
-                [Tensor(3,0), Tensor(3,1), Tensor(3,2), Tensor(3,3)]])
-    print (K.inv(method = 'LU')[i,j])
-    return K.inv (method = 'LU')[i,j]
+# Minkowski metric tensor (4x4 for 3D spacetime)
+minkowski_metric = np.diag([-1, 1, 1, 1])
 
-def gamma(i, j, k):
-    s=0
-    for l in range(4):
-        
-        s += 0.5*im(i,l)*(dm(k,l,j)+dm(l,j,k)-dm(j,k,l))
-    return simplify(s)
+# Schrödinger metric tensor (4x4 for 3D spacetime)
+schrodinger_metric = np.diag([1, 1, 1, -1])
 
-for a in range(4):
-    for b in range(4):
-        for c in range(5):
-            if(gamma(a,b,c)== 0):
-                pass
-            else:
-                print("[",a,b,c,"]", gamma(a,b,c))
+# Function to apply a metric based on the dataset configuration
+def apply_metric(position, velocity, metric):
+    spacetime_coordinates = np.concatenate([position, velocity])
+    metric_coordinates = np.dot(metric, spacetime_coordinates)
+    return metric_coordinates[:3], metric_coordinates[3:]
 
+# Simulated dataset configuration (replace with your data)
+# Features: Initial position, initial velocity, planet parameters, etc.
+# Target: Spacecraft trajectory
+dataset_configurations = np.random.choice(['minkowski', 'schrodinger'], size=1000)
+X = np.random.rand(1000, 10)  
+y = np.random.rand(1000, 3)  
 
+# Applying metric based on dataset configuration
+X_transformed = []
+for config, pos, vel in zip(dataset_configurations, X[:, :3], X[:, 3:]):
+    if config == 'minkowski':
+        transformed_pos, transformed_vel = apply_metric(pos, vel, minkowski_metric)
+    elif config == 'schrodinger':
+        transformed_pos, transformed_vel = apply_metric(pos, vel, schrodinger_metric)
+    else:
+        raise ValueError("Invalid dataset configuration")
 
+    X_transformed.append(np.concatenate([transformed_pos, transformed_vel]))
 
+X_transformed = np.array(X_transformed)
+
+#splitting dataset
+X_train, X_test, y_train, y_test = train_test_split(X_transformed, y, test_size=0.2, random_state=42)
+
+#standardizing funcs
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+model = models.Sequential([
+    layers.Dense(64, activation='relu', input_shape=(X_train.shape[1],)),
+    layers.Dense(64, activation='relu'),
+    layers.Dense(3, activation='linear') 
+])
+
+def custom_loss(y_true, y_pred):
+    return tf.keras.losses.mean_squared_error(y_true, y_pred)
+
+model.compile(optimizer='adam', loss=custom_loss)
+
+model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
+
+loss = model.evaluate(X_test, y_test)
+print(f'Final Loss: {loss}')
+
+y_pred = model.predict(X_test)
