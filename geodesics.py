@@ -3,33 +3,30 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras import layers, models
+from sympy import symbols, diff, Matrix, simplify, sin
 
-# Minkowski metric tensor (4x4 for 3D spacetime)
-minkowski_metric = np.diag([-1, 1, 1, 1])
+# Define symbolic variables
+M, t, r, theta, phi = symbols("M t r theta phi")
+coor = [t, r, theta, phi]
 
-# Schrödinger metric tensor (4x4 for 3D spacetime)
-schrodinger_metric = np.diag([1, 1, 1, -1])
+# Schwarzschild metric tensor (4x4 for 3D spacetime)
+schwarzschild_metric = np.diag([1 - 2 * M / r, -1 / (1 - 2 * M / r), -r**2, -(r**2 * sin(theta)**2)])
 
-# Function to apply a metric based on the dataset configuration
-def apply_metric(position, velocity, metric):
+# Function to apply the Schwarzschild metric
+def apply_schwarzschild_metric(position, velocity):
     spacetime_coordinates = np.concatenate([position, velocity])
-    metric_coordinates = np.dot(metric, spacetime_coordinates)
-    return metric_coordinates[:3], metric_coordinates[3:]
+    schwarzschild_coordinates = np.dot(schwarzschild_metric, spacetime_coordinates)
+    return schwarzschild_coordinates[:3], schwarzschild_coordinates[3:]
 
-# Simulated dataset configuration (replace with your data)
-# Features: Initial position, initial velocity, planet parameters, etc.
-# Target: Spacecraft trajectory
-dataset_configurations = np.random.choice(['minkowski', 'schrodinger'], size=1000)
-X = np.random.rand(1000, 10)  
-y = np.random.rand(1000, 3)  
+dataset_configurations = np.random.choice(['schwarzschild'], size=1000)
+X = np.random.rand(1000, 10)  # Replace with actual features
+y = np.random.rand(1000, 3)  # Replace with actual trajectories
 
-# Applying metric based on dataset configuration
+# Applying Schwarzschild metric to features
 X_transformed = []
 for config, pos, vel in zip(dataset_configurations, X[:, :3], X[:, 3:]):
-    if config == 'minkowski':
-        transformed_pos, transformed_vel = apply_metric(pos, vel, minkowski_metric)
-    elif config == 'schrodinger':
-        transformed_pos, transformed_vel = apply_metric(pos, vel, schrodinger_metric)
+    if config == 'schwarzschild':
+        transformed_pos, transformed_vel = apply_schwarzschild_metric(pos, vel)
     else:
         raise ValueError("Invalid dataset configuration")
 
@@ -37,10 +34,10 @@ for config, pos, vel in zip(dataset_configurations, X[:, :3], X[:, 3:]):
 
 X_transformed = np.array(X_transformed)
 
-#splitting dataset
+# Spliting dataset
 X_train, X_test, y_train, y_test = train_test_split(X_transformed, y, test_size=0.2, random_state=42)
 
-#standardizing funcs
+# Standardize funcs
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
@@ -48,7 +45,7 @@ X_test = scaler.transform(X_test)
 model = models.Sequential([
     layers.Dense(64, activation='relu', input_shape=(X_train.shape[1],)),
     layers.Dense(64, activation='relu'),
-    layers.Dense(3, activation='linear') 
+    layers.Dense(3, activation='linear')  # Adjust output dimensions based on trajectory
 ])
 
 def custom_loss(y_true, y_pred):
